@@ -14,8 +14,8 @@ void begin() {
 void update() {
   // code syntax: pwm.setPin(channel, value)
   pwm.setPWM(STEER_PWM_CHANNEL, 0, STEER_PWM_u0);
-  pwm.setPWM(NECK_PWM_CHANNEL, 0, NECK_PWM_u0);
-  pwm.setPWM(BEAK_PWM_CHANNEL, 0, BEAK_PWM_u0);
+  pwm.setPWM(NECK_PWM_CHANNEL, 0, GOOSE_PWM_u0);
+  pwm.setPWM(BEAK_PWM_CHANNEL, 0, GOOSE_PWM_u0);
   
 }
 
