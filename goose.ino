@@ -18,11 +18,10 @@ const int u0_motor = 77; /* around 30% of 256*/
 #include <Adafruit_I2CRegister.h>
 #include <Adafruit_SPIDevice.h>
 
-// ------ Steering ------
+// ------ Include Components ------
 #include "servo.h"
-
-// ------ HuskyLens 2 ------
 #include "tracker.h"
+#include "audio.h"
 
 /* ------------------------------------------------------------------------------------------------- */
 

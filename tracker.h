@@ -1,4 +1,4 @@
-#pragma once
+#pragma once // include a header file only once during a single compilation
 #include <Arduino.h>
 
 // Pin / threshold config lives with the module so it's self-contained.
