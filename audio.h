@@ -3,20 +3,22 @@
 
 namespace audio {
 
-// -------- Wiring: Arduino GPIO -> Sound Board trigger pin --------
-constexpr int PIN_TRIG_HONK      = 2;   // -> Sound Board #0  (T00.WAV)
-constexpr int PIN_TRIG_FOUND_YOU = 3;   // -> Sound Board #1  (T01.WAV)
-constexpr int PIN_TRIG_CONFUSED  = 4;   // -> Sound Board #2  (T02.WAV)
-constexpr int PIN_TRIG_HAPPY     = 5;   // -> Sound Board #3  (T03.WAV)
+// Wiring: Arduino pin -> Sound Board trigger pin
+constexpr int PIN_HONK_1  = 2;   // -> #0 (T00.WAV)
+constexpr int PIN_HONK_2  = 3;   // -> #1 (T01.WAV)
+constexpr int PIN_HONK_3  = 4;   // -> #2 (T02.WAV)
+constexpr int PIN_HONK_4  = 5;   // -> #3 (T03.WAV)
+constexpr int PIN_SUCCESS = 6;   // -> #4 (T04.WAV) (The "success ding")
 
 constexpr unsigned long TRIGGER_PULSE_MS = 150;
 
 void begin();
-void update();     // call every loop() — services non-blocking pulses
+void update(); // MUST be called every loop()
 
-void honk();       // T00
-void foundYou();   // T01
-void confused();   // T02
-void happy();      // T03
+void playHonk1();
+void playHonk2();
+void playHonk3();
+void playHonk4();
+void playSuccess();
 
 } // namespace audio

@@ -8,48 +8,55 @@ struct Channel {
   unsigned long startMs;
 };
 
-static Channel chHonk      = { PIN_TRIG_HONK,      false, 0 };
-static Channel chFoundYou  = { PIN_TRIG_FOUND_YOU, false, 0 };
-static Channel chConfused  = { PIN_TRIG_CONFUSED,  false, 0 };
-static Channel chHappy     = { PIN_TRIG_HAPPY,     false, 0 };
+// Set up the 5 channels
+static Channel chHonk1   = { PIN_HONK_1,  false, 0 };
+static Channel chHonk2   = { PIN_HONK_2,  false, 0 };
+static Channel chHonk3   = { PIN_HONK_3,  false, 0 };
+static Channel chHonk4   = { PIN_HONK_4,  false, 0 };
+static Channel chSuccess = { PIN_SUCCESS, false, 0 };
 
 static void initChannel(Channel &c) {
   pinMode(c.pin, OUTPUT);
-  digitalWrite(c.pin, HIGH);   // inactive (pull-up on board keeps it idle)
-  c.active  = false;
-  c.startMs = 0;
+  digitalWrite(c.pin, HIGH); // HIGH = Not triggered
+  c.active = false;
 }
 
 static void fire(Channel &c) {
-  digitalWrite(c.pin, LOW);
-  c.active  = true;
-  c.startMs = millis();
+  // Only fire if it's not already firing
+  if (!c.active) {
+    digitalWrite(c.pin, LOW); // LOW = Trigger sound
+    c.active = true;
+    c.startMs = millis();
+  }
 }
 
 static void service(Channel &c) {
   if (c.active && (millis() - c.startMs >= TRIGGER_PULSE_MS)) {
-    digitalWrite(c.pin, HIGH);
+    digitalWrite(c.pin, HIGH); // Reset back to HIGH
     c.active = false;
   }
 }
 
 void begin() {
-  initChannel(chHonk);
-  initChannel(chFoundYou);
-  initChannel(chConfused);
-  initChannel(chHappy);
+  initChannel(chHonk1);
+  initChannel(chHonk2);
+  initChannel(chHonk3);
+  initChannel(chHonk4);
+  initChannel(chSuccess);
 }
 
-void honk()      { fire(chHonk); }
-void foundYou()  { fire(chFoundYou); }
-void confused()  { fire(chConfused); }
-void happy()     { fire(chHappy); }
+void playHonk1()   { fire(chHonk1); }
+void playHonk2()   { fire(chHonk2); }
+void playHonk3()   { fire(chHonk3); }
+void playHonk4()   { fire(chHonk4); }
+void playSuccess() { fire(chSuccess); }
 
 void update() {
-  service(chHonk);
-  service(chFoundYou);
-  service(chConfused);
-  service(chHappy);
+  service(chHonk1);
+  service(chHonk2);
+  service(chHonk3);
+  service(chHonk4);
+  service(chSuccess);
 }
 
 } // namespace audio

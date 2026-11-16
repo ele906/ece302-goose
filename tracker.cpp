@@ -1,68 +1,69 @@
 #include "tracker.h"
-#include "HUSKYLENS.h"
 #include <Wire.h>
+
+#include <DFRobot_HuskylensV2.h>
+#include <ProtocolV2.h>
+#include <Result.h>
+
+#include "servo.h"
 
 namespace tracker {
 
-static HUSKYLENS huskylens;
+static HuskylensV2 huskylens;      
 static unsigned long lastSeenMs = 0;
 static bool          everSeen   = false;
 static bool          visible    = false;
 
-static void allOff() {
-  digitalWrite(PIN_RIGHT,  LOW);
-  digitalWrite(PIN_CENTER, LOW);
-  digitalWrite(PIN_LEFT,   LOW);
-}
+static int currentX = 0;
+static int currentW = 0;
 
 void begin() {
   Wire.begin();
-  if (!huskylens.begin(Wire)) {
-    Serial.println(F("Can't connect to HuskyLens!"));
-    while (true);
+  while (!huskylens.begin(Wire)) {
+    Serial.println(F("Can't connect to HuskyLens 2!"));
+    delay(100);
   }
-  huskylens.writeAlgorithm(ALGORITHM_FACE_RECOGNITION);
-
-  pinMode(PIN_RIGHT,  OUTPUT);
-  pinMode(PIN_CENTER, OUTPUT);
-  pinMode(PIN_LEFT,   OUTPUT);
-  allOff();
+  huskylens.switchAlgorithm(ALGORITHM_FACE_RECOGNITION);
 }
 
 void update() {
   visible = false;
 
-  if (huskylens.requestLearned() && huskylens.available() > 0) {
-    int n = huskylens.countBlocks();
-    for (int i = 0; i < n; i++) {
-      HUSKYLENSResult r = huskylens.getBlock(i);
-      if (r.ID != TARGET_ID) continue;
-
+  huskylens.getResult(ALGORITHM_FACE_RECOGNITION);
+  
+  if (huskylens.available(ALGORITHM_FACE_RECOGNITION)) {
+    auto centerResult = huskylens.getCachedCenterResult(ALGORITHM_FACE_RECOGNITION);
+    
+    // Check ID (using the macro from ProtocolV2.h / Result.h)
+    int id = RET_ITEM_NUM(centerResult, Result, ID);
+    
+    if (id == TARGET_ID) {
       visible     = true;
       everSeen    = true;
       lastSeenMs  = millis();
+      
+      currentX    = RET_ITEM_NUM(centerResult, Result, xCenter);
+      currentW    = RET_ITEM_NUM(centerResult, Result, width);
 
-      allOff();
-      if (r.xCenter > FRAME_CENTER_X + CENTER_THRESHOLD) {
-        digitalWrite(PIN_RIGHT, HIGH);
-        Serial.println("RIGHT");
-      } else if (r.xCenter < FRAME_CENTER_X - CENTER_THRESHOLD) {
-        digitalWrite(PIN_LEFT, HIGH);
-        Serial.println("LEFT");
+      int error = currentX - FRAME_CENTER_X; 
+      
+      if (error > CENTER_THRESHOLD) {
+        servo::setSteer(servo::STEER_PWM_u0 + (error / 2));
+      } else if (error < -CENTER_THRESHOLD) {
+        servo::setSteer(servo::STEER_PWM_u0 + (error / 2));
       } else {
-        digitalWrite(PIN_CENTER, HIGH);
-        Serial.println("CENTER");
+        servo::setSteer(servo::STEER_PWM_u0);
       }
-      break;
     }
   }
 
   if (!visible && everSeen && (millis() - lastSeenMs > LOST_TIMEOUT_MS)) {
-    allOff();
-    Serial.println("LOST - stopped");
+    servo::setSteer(servo::STEER_PWM_u0);
   }
 }
 
 bool targetVisible() { return visible; }
+int  getTargetXCenter() { return currentX; }
+int  getTargetWidth() { return currentW; }
 
 } // namespace tracker
