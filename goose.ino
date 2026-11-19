@@ -13,10 +13,12 @@
 
 SoftwareSerial xbee(10, 11); // DOUT - 10 (Rx) DIN - 11 (Tx)
 
-enum class State { IDLE, ACQUIRE, TRACK, PECK, SEARCH };
+enum class State { IDLE, ACQUIRE, TRACK, PECK, DONE, SEARCH };
+const unsigned long DONE_HOLD_MS = 5000;   // stay stopped this long after a peck
 
 State state = State::IDLE;
 State prevState = State::IDLE;
+
 unsigned long stateStartMs = 0;
 const unsigned long SEARCH_TIMEOUT_MS = 10000;  // lost this long -> back to IDLE
 
@@ -82,6 +84,15 @@ void loop() {
       if (sees) state = State::TRACK;
       else if (millis() - stateStartMs > SEARCH_TIMEOUT_MS) state = State::IDLE;
       break;
+
+    case State::PECK:
+      if (lost) state = State::SEARCH;
+      else if (!servo::isPecking() && pecked) state = State::DONE;
+      break;
+
+    case State::DONE:
+      if (millis() - stateStartMs > DONE_HOLD_MS) state = State::IDLE;
+      break;
   }
 
   // ------ 3. Sounds on state change ------
@@ -120,6 +131,12 @@ void loop() {
       bool wasPecking = servo::isPecking();
       servo::triggerPeck();             // cooldown inside servo.cpp
       if (!wasPecking && servo::isPecking()) audio::playHonk1();  // honk once per peck
+      break;
+    }
+
+    case State::DONE: {
+      speed::stop();
+      centerEverything();
       break;
     }
   }

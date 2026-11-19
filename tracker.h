@@ -8,6 +8,7 @@ constexpr int  FRAME_CENTER_X   = 320;  // HuskyLens 2 resolution is 640
 constexpr int  TARGET_ID        = 1;
 constexpr unsigned long LOST_TIMEOUT_MS = 500;
 constexpr int  PECK_WIDTH_THRESHOLD = 150;  // face width (px) at ~2 ft, measure and tune
+constexpr bool ANY_FACE = true;   // true: chase any face; false: only faces learned as TARGET_ID
 
 void begin();
 void update();             // call every loop(); only reads the camera
