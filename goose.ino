@@ -6,114 +6,123 @@
 #include <Wire.h>
 #include <SoftwareSerial.h>
 
-// ------ Include Components ------
 #include "servo.h"
-// #include "tracker.h"
+#include "tracker.h"
 #include "audio.h"
+#include "speed.h"
 
-// ------ Serial ------
 SoftwareSerial xbee(10, 11); // DOUT - 10 (Rx) DIN - 11 (Tx)
 
-// ------ Motor PWM ------
-const int PWM_Motor = 3;
-const int u0_motor = 77; // ~30% of 255 (stopped/idle)
+enum class State { IDLE, ACQUIRE, TRACK, PECK, SEARCH };
 
-// ------ States ------
-enum class State {
-  IDLE,       // No target, stopped
-  ACQUIRE,    // Target just seen
-  TRACK,      // Target centered, driving forward
-  SEARCH,     // Target lost, looking around
-  STOP        // E-stop
-};
-
-State currentState = State::IDLE;
+State state = State::IDLE;
 State prevState = State::IDLE;
+unsigned long stateStartMs = 0;
+const unsigned long SEARCH_TIMEOUT_MS = 10000;  // lost this long -> back to IDLE
+
+// Point steering and head at the face
+static void aimAtTarget() {
+  int error = tracker::getTargetXCenter() - tracker::FRAME_CENTER_X;
+
+  if (abs(error) <= tracker::CENTER_THRESHOLD) {
+    servo::setSteer(servo::STEER_PWM_u0);
+  } else {
+    servo::setSteer(servo::STEER_PWM_u0 + (error / 2));  // flip sign if it steers away
+  }
+  servo::setNeckX(servo::GOOSE_PWM_u0 + (error / 4));    // flip sign if head turns away
+}
+
+static void centerEverything() {
+  servo::setSteer(servo::STEER_PWM_u0);
+  servo::setNeckX(servo::GOOSE_PWM_u0);
+}
 
 void setup() {
-  // 1. Initialize Serial (Fixed Baud Rate)
-  Serial.begin(115200); 
+  Serial.begin(115200);
   xbee.begin(115200);
-  
-  // 2. Initialize Motor
-  pinMode(PWM_Motor, OUTPUT);
-  analogWrite(PWM_Motor, u0_motor); // Make sure car is stopped on boot
 
-  // 3. Initialize Components
-  //tracker::begin(); 
-  audio::begin(); 
-  servo::begin(); 
-  
+  speed::begin();     // car stopped on boot
+  tracker::begin();
+  audio::begin();
+  servo::begin();
+
   Serial.println(F("Goose Robot Ready!"));
 }
 
 void loop() {
-  // ------ 1. Update Inputs/Sensors ------
-  //tracker::update();
+  // ------ 1. Inputs ------
+  tracker::update();
   audio::update();
-  servo::update();
 
-  // ------ 2. Decide what to do (State Machine) ------
-  /* (Assuming tracker::targetVisible() returns true if it sees the face)
-  bool seesTarget = tracker::targetVisible(); 
+  bool sees  = tracker::targetVisible();
+  bool lost  = tracker::targetLost();
+  bool close = sees && tracker::getTargetWidth() >= tracker::PECK_WIDTH_THRESHOLD;
 
-  switch (currentState) {
+  // ------ 2. State transitions ------
+  switch (state) {
     case State::IDLE:
-      if (seesTarget) currentState = State::ACQUIRE;
+      if (sees) state = State::ACQUIRE;
       break;
 
     case State::ACQUIRE:
-      // Just saw the target, transition to tracking
-      currentState = State::TRACK;
+      state = State::TRACK;
       break;
 
     case State::TRACK:
-      if (!seesTarget) {
-        currentState = State::SEARCH;
-      }
+      if (lost)       state = State::SEARCH;
+      else if (close) state = State::PECK;
+      break;
+
+    case State::PECK:
+      if (lost) state = State::SEARCH;
+      else if (!close && !servo::isPecking()) state = State::TRACK;
       break;
 
     case State::SEARCH:
-      if (seesTarget) {
-        currentState = State::TRACK;
-      }
-      // (Optional: Add a timeout here to go back to IDLE if lost for 10 seconds)
-      break;
-
-    case State::STOP:
-      // Do nothing, wait for reset
+      if (sees) state = State::TRACK;
+      else if (millis() - stateStartMs > SEARCH_TIMEOUT_MS) state = State::IDLE;
       break;
   }
 
-  // ------ 3. Play Sounds on State Change ------
-  if (currentState != prevState) {
-    switch (currentState) {
-      case State::ACQUIRE: audio::playSuccess();  break; // The "Success Ding"
-      case State::SEARCH:  audio::playHonk2();    break; // The "Confused" honk
-      case State::STOP:    audio::playHonk4();    break; // Emergency alarm honk
+  // ------ 3. Sounds on state change ------
+  if (state != prevState) {
+    stateStartMs = millis();
+    switch (state) {
+      case State::ACQUIRE: audio::playSuccess(); break;
+      case State::SEARCH:  audio::playHonk2();   break;
       default: break;
     }
-    prevState = currentState;
+    prevState = state;
   }
 
-  // ------ 4. Act on the current state (Motors & Servos) ------
-  switch (currentState) {
+  // ------ 4. Act ------
+  switch (state) {
     case State::IDLE:
     case State::SEARCH:
-    case State::STOP:
-      analogWrite(PWM_Motor, u0_motor); // Stop moving
+      speed::stop();
+      centerEverything();
+      break;
+
+    case State::ACQUIRE:
+      speed::stop();
       break;
 
     case State::TRACK:
-      analogWrite(PWM_Motor, u0_motor + 40); // Drive forward (tune this value!)
+      if (sees) {                       // on a missed frame, keep last command
+        aimAtTarget();
+        speed::driveForWidth(tracker::getTargetWidth());
+      }
       break;
-      
-    case State::ACQUIRE:
-      analogWrite(PWM_Motor, u0_motor); // Stop while we transition
-      break;
-  }
-  */
 
-  // ------ 5. Small delay ------
-  delay(50); // Reduced from 100ms so the robot reacts faster
+    case State::PECK: {
+      speed::stop();
+      if (sees) aimAtTarget();
+      bool wasPecking = servo::isPecking();
+      servo::triggerPeck();             // cooldown inside servo.cpp
+      if (!wasPecking && servo::isPecking()) audio::playHonk1();  // honk once per peck
+      break;
+    }
+  }
+
+  servo::update();
 }
